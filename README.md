@@ -9,7 +9,7 @@
 <p align="center">
   <a href="#installation"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="MIT License"></a>
-  <a href="https://github.com/UnsaltedHash42/lacona/releases"><img src="https://img.shields.io/badge/version-0.2.0-purple.svg" alt="v0.2.0"></a>
+  <a href="https://github.com/UnsaltedHash42/lacona/releases"><img src="https://img.shields.io/badge/version-0.3.0-purple.svg" alt="v0.3.0"></a>
 </p>
 
 Lacuna finds novel DLL search-order hijacking opportunities in installed software. It statically analyzes PE import tables, identifies sideloadable DLLs, generates ready-to-compile proxy DLL source code, and optionally validates findings with canary deployments.
@@ -49,6 +49,9 @@ Proxy project generated: ./lacuna_output/proxies/dxcompiler/
 ## Features
 
 - **Cross-platform static analysis** — scan PE files from macOS/Linux (no Windows needed for discovery)
+- **Extended discovery** — parses delay-load imports and extracts LoadLibrary string references from PE sections
+- **Operability scoring** — auto-ranks candidates by exploitation value (writability, auto-start, SYSTEM context, novelty, export count, etc.)
+- **Remote validation** — deploy canary DLLs to a remote Windows host over WinRM/SSH, trigger the app, and confirm load + process survival
 - **Novelty filtering** — checks findings against [hijacklibs.net](https://hijacklibs.net) to surface only undiscovered hijacks
 - **Proxy DLL generation** — complete C source + .DEF file with export forwarders
 - **Canary compilation** — build minimal test DLLs to confirm a load path works

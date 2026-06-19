@@ -1,6 +1,6 @@
 [project]
 name = "lacuna"
-version = "0.2.0"
+version = "0.3.0"
 description = "Automated DLL sideload/hijack discovery for Windows applications"
 readme = "README.md"
 license = {text = "MIT"}
@@ -29,12 +29,16 @@ windows = [
     "pywin32>=306",
     "wmi>=1.5",
 ]
+remote = [
+    "pywinrm>=0.4.3",
+    "paramiko>=3.4",
+]
 dev = [
     "pytest>=8.0",
     "ruff>=0.4",
 ]
 all = [
-    "lacuna[agent,windows]",
+    "lacuna[agent,windows,remote]",
 ]
 
 [project.urls]

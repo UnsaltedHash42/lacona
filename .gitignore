@@ -29,6 +29,12 @@ MONDAY_PLAN.md
 METHODOLOGY.md
 run_*.py
 
+# Internal planning / session docs
+HANDOFF.md
+PROMPT.md
+docs/DEVPLAN*.md
+docs/ROADMAP.md
+
 # Compiled DLLs
 *.dll
 *.exe

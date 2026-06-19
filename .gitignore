@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.egg-info/
+*.pyc
+dist/
+build/
+.eggs/
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Output (generated per-run)
+lacuna_output/
+
+# Engagement-specific (DO NOT COMMIT)
+infra/
+staging/
+evidence/
+output/HUNT_REPORT.md
+output/WEAPONIZATION_GUIDE.md
+output/FINDINGS_REPORT.html
+STATUS.md
+MONDAY_PLAN.md
+METHODOLOGY.md
+run_*.py
+
+# Compiled DLLs
+*.dll
+*.exe
+*.o
+*.obj
+
+# Sensitive
+*.pem
+*.key
+.env
+credentials*

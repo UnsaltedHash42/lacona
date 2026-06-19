@@ -1,0 +1,12 @@
+LIBRARY "libiconv-2"
+EXPORTS
+    libiconv=libiconv-2_orig.libiconv
+    libiconv_close=libiconv-2_orig.libiconv_close
+    libiconv_open=libiconv-2_orig.libiconv_open
+    libiconv_open_into=libiconv-2_orig.libiconv_open_into
+    libiconv_set_relocation_prefix=libiconv-2_orig.libiconv_set_relocation_prefix
+    libiconvctl=libiconv-2_orig.libiconvctl
+    libiconvlist=libiconv-2_orig.libiconvlist
+    locale_charset=libiconv-2_orig.locale_charset
+    _libiconv_version=libiconv-2_orig._libiconv_version
+    libiconv_relocate=libiconv-2_orig.libiconv_relocate

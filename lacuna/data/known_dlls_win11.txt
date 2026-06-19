@@ -1,0 +1,44 @@
+# Windows 11 KnownDLLs — from HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs
+# These cannot be hijacked via search-order; the kernel loads them from a pre-mapped section.
+# Update by running: reg query "HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\KnownDLLs"
+advapi32.dll
+clbcatq.dll
+combase.dll
+COMDLG32.dll
+coml2.dll
+DifxApi.dll
+gdi32.dll
+gdiplus.dll
+IMAGEHLP.dll
+IMM32.dll
+kernel32.dll
+MSCTF.dll
+MSVCRT.dll
+NORMALIZ.dll
+NSI.dll
+ole32.dll
+OLEAUT32.dll
+PSAPI.DLL
+rpcrt4.dll
+sechost.dll
+Setupapi.dll
+SHCORE.dll
+SHELL32.dll
+shlwapi.dll
+user32.dll
+WLDAP32.dll
+wow64.dll
+wow64win.dll
+WS2_32.dll
+ucrtbase.dll
+kernelbase.dll
+ntdll.dll
+iertutil.dll
+version.dll
+profapi.dll
+wintrust.dll
+msasn1.dll
+cfgmgr32.dll
+bcryptprimitives.dll
+powrprof.dll
+umpdc.dll

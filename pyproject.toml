@@ -1,0 +1,52 @@
+[project]
+name = "lacuna"
+version = "0.2.0"
+description = "Automated DLL sideload/hijack discovery for Windows applications"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+keywords = ["dll", "sideload", "hijack", "windows", "security", "red-team", "pentesting"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Information Technology",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Topic :: Security",
+]
+dependencies = [
+    "pefile>=2023.2.7",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+agent = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.0",
+]
+windows = [
+    "pywin32>=306",
+    "wmi>=1.5",
+]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+]
+all = [
+    "lacuna[agent,windows]",
+]
+
+[project.urls]
+Homepage = "https://github.com/your-org/lacuna"
+Issues = "https://github.com/your-org/lacuna/issues"
+
+[project.scripts]
+lacuna = "lacuna.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["lacuna*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

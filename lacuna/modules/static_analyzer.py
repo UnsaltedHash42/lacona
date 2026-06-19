@@ -6,6 +6,7 @@ Works cross-platform via pefile. No Windows APIs needed.
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
 
 import pefile
@@ -64,6 +65,47 @@ def get_pe_imports(pe_path: Path) -> list[str]:
             dlls.append(name)
     pe.close()
     return dlls
+
+
+def get_pe_delay_imports(pe_path: Path) -> list[str]:
+    """Extract delay-loaded DLL names from a PE file."""
+    try:
+        pe = pefile.PE(str(pe_path), fast_load=True)
+        pe.parse_data_directories(
+            directories=[pefile.DIRECTORY_ENTRY["IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT"]]
+        )
+    except pefile.PEFormatError:
+        return []
+
+    dlls = []
+    if hasattr(pe, "DIRECTORY_ENTRY_DELAY_IMPORT"):
+        for entry in pe.DIRECTORY_ENTRY_DELAY_IMPORT:
+            name = entry.dll.decode("utf-8", errors="replace").lower()
+            dlls.append(name)
+    pe.close()
+    return dlls
+
+
+DLL_NAME_PATTERN = re.compile(rb"([a-zA-Z0-9_\-]+\.dll)\x00", re.IGNORECASE)
+
+
+def get_pe_loadlibrary_strings(pe_path: Path) -> list[str]:
+    """Extract DLL names referenced as strings (potential LoadLibrary targets)."""
+    try:
+        pe = pefile.PE(str(pe_path), fast_load=True)
+    except pefile.PEFormatError:
+        return []
+
+    dlls = set()
+    for section in pe.sections:
+        data = section.get_data()
+        for match in DLL_NAME_PATTERN.finditer(data):
+            dll_name = match.group(1).decode("utf-8", errors="replace").lower()
+            if len(dll_name) > 4 and not dll_name.startswith("api-ms-"):
+                dlls.add(dll_name)
+
+    pe.close()
+    return list(dlls)
 
 
 def get_pe_arch(pe_path: Path) -> str:
@@ -141,6 +183,9 @@ def analyze_binary(
     target.imports = imports
 
     candidates = []
+    seen_dlls: set[str] = set()
+
+    # Standard imports
     for dll_name in imports:
         dll_lower = dll_name.lower()
 
@@ -158,8 +203,55 @@ def analyze_binary(
             hijack_type=hijack_type,
             status=CandidateStatus.DISCOVERED,
             is_known_dll=False,
+            discovery_method="import_table",
         )
         candidates.append(candidate)
+        seen_dlls.add(dll_lower)
+
+    # Delay-load imports
+    delay_imports = get_pe_delay_imports(pe_path)
+    for dll_name in delay_imports:
+        dll_lower = dll_name.lower()
+        if dll_lower in known_dlls or dll_lower.startswith("api-ms-win-"):
+            continue
+        if dll_lower in seen_dlls:
+            continue
+
+        hijack_type = HijackType.DELAY_LOAD
+        if system32_contents and dll_lower not in system32_contents:
+            hijack_type = HijackType.PHANTOM
+
+        candidate = HijackCandidate(
+            target=target,
+            dll_name=dll_name,
+            hijack_type=hijack_type,
+            status=CandidateStatus.DISCOVERED,
+            is_known_dll=False,
+            discovery_method="delay_import",
+        )
+        candidates.append(candidate)
+        seen_dlls.add(dll_lower)
+
+    # LoadLibrary string references
+    runtime_dlls = get_pe_loadlibrary_strings(pe_path)
+    for dll_name in runtime_dlls:
+        dll_lower = dll_name.lower()
+        if dll_lower in known_dlls or dll_lower.startswith("api-ms-win-"):
+            continue
+        if dll_lower in seen_dlls:
+            continue
+
+        candidate = HijackCandidate(
+            target=target,
+            dll_name=dll_name,
+            hijack_type=HijackType.RUNTIME_LOAD,
+            status=CandidateStatus.DISCOVERED,
+            is_known_dll=False,
+            discovery_method="string_ref",
+            confidence="medium",
+        )
+        candidates.append(candidate)
+        seen_dlls.add(dll_lower)
 
     return candidates
 

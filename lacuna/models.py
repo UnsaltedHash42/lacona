@@ -12,6 +12,8 @@ class HijackType(Enum):
     PHANTOM = "phantom"  # DLL that doesn't exist anywhere
     PATH_DIR = "path_dir"  # writable PATH directory
     SIDE_LOAD = "side_load"  # app-dir placement
+    DELAY_LOAD = "delay_load"  # PE delay-import directory
+    RUNTIME_LOAD = "runtime_load"  # LoadLibrary string reference
 
 
 class TriggerMechanism(Enum):
@@ -52,10 +54,13 @@ class HijackCandidate:
     hijack_type: HijackType
     status: CandidateStatus = CandidateStatus.DISCOVERED
     score: float = 0.0
+    score_breakdown: dict[str, int] = field(default_factory=dict)
     plant_path: Path | None = None
     is_known_dll: bool = False
     is_on_hijacklibs: bool = False
     export_count: int = 0
+    discovery_method: str = "import_table"  # import_table | delay_import | string_ref
+    confidence: str = "high"  # high | medium | low
     notes: list[str] = field(default_factory=list)
 
 

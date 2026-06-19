@@ -167,28 +167,32 @@ def compile_canary(
         source_path = Path(f.name)
 
     try:
+        # Stripped CRT-free build first — yields ~12KB DLL, important because
+        # WinRM upload chunks at ~5KB so larger DLLs mean more round trips.
+        # wsprintfA needs user32; without -luser32 the nostdlib link fails.
         cmd = [
             str(compiler),
-            "-shared",
+            "-shared", "-s", "-Os",
             "-o", str(output_path),
             str(source_path),
-            "-lkernel32",
             "-nostdlib",
+            "-lkernel32", "-luser32",
             "-Wl,--entry,DllMain",
         ]
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if result.returncode != 0:
-            # Try with standard lib (some DLLs need CRT)
+            log.warning("Stripped canary build failed (%s) — falling back to CRT build", result.stderr.strip()[:200])
+            # Full CRT fallback (works but ~100KB)
             cmd_crt = [
                 str(compiler),
-                "-shared",
+                "-shared", "-s",
                 "-o", str(output_path),
                 str(source_path),
             ]
             result = subprocess.run(cmd_crt, capture_output=True, text=True, timeout=30)
 
         if result.returncode == 0:
-            log.info("Compiled canary: %s", output_path)
+            log.info("Compiled canary: %s (%d bytes)", output_path, output_path.stat().st_size)
             return True
         else:
             log.error("Compilation failed: %s", result.stderr)

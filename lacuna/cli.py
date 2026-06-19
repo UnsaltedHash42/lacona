@@ -67,7 +67,7 @@ def main():
     validate_p.add_argument("--findings", type=Path, required=True, help="JSON from scan output")
     validate_p.add_argument("--max-parallel", type=int, default=1, help="Parallel validations")
     validate_p.add_argument("--filter-score", type=int, help="Only validate above this score")
-    validate_p.add_argument("--timeout", type=int, default=30, help="Timeout per validation (s)")
+    validate_p.add_argument("--timeout", type=int, default=60, help="Timeout per validation (s)")
     validate_p.add_argument("--dry-run", action="store_true", help="Show plan without executing")
 
     # --- canary: compile and test a canary DLL ---
@@ -370,7 +370,7 @@ def _cmd_validate(args):
     validator = RemoteValidator(target)
     try:
         validator.connect()
-        results = validator.validate_batch(findings, canary_dir)
+        results = validator.validate_batch(findings, canary_dir, timeout=args.timeout)
     finally:
         validator.disconnect()
 

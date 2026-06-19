@@ -81,7 +81,7 @@ class RemoteValidator:
         self,
         candidate: dict,
         canary_dll_path: Path,
-        timeout: int = 30,
+        timeout: int = 60,
     ) -> ValidationResult:
         """Full validation cycle for one candidate.
 
@@ -147,10 +147,16 @@ class RemoteValidator:
                         f"Copy-Item '{remote_canary}' '{target_dir}\\{dll_name}' -Force"
                     )
 
-                # Launch host application
+                # Launch host application via WMI Win32_Process.Create.
+                # Start-Process returns a process whose lifetime is tied to
+                # the WinRM shell — when pywinrm's per-call shell closes the
+                # spawned host app gets killed before it ever loads our DLL.
+                # WMI launches detach from the calling session.
                 launch_cmd = (
-                    f"$proc = Start-Process '{host_path}' -PassThru -ErrorAction Stop; "
-                    f"$proc.Id"
+                    f"$r = Invoke-WmiMethod -Class Win32_Process -Name Create "
+                    f"-ArgumentList '{host_path}'; "
+                    f"if ($r.ReturnValue -ne 0) {{ Write-Error \"WMI launch failed: $($r.ReturnValue)\"; exit 1 }}; "
+                    f"$r.ProcessId"
                 )
                 _, stdout, stderr = self._run_remote(launch_cmd)
                 proc_id = stdout.strip()
@@ -230,6 +236,7 @@ class RemoteValidator:
         candidates: list[dict],
         canary_dir: Path,
         max_parallel: int = 1,
+        timeout: int = 60,
     ) -> list[ValidationResult]:
         """Validate a list of candidates sequentially."""
         results = []
@@ -244,7 +251,7 @@ class RemoteValidator:
                     error=f"Canary DLL not found: {canary_path}",
                 ))
                 continue
-            result = self.validate_candidate(candidate, canary_path)
+            result = self.validate_candidate(candidate, canary_path, timeout=timeout)
             results.append(result)
             log.info(
                 "%s via %s: %s (%.1fs)",
@@ -275,31 +282,44 @@ class RemoteValidator:
         raise ValueError(f"Unknown transport: {self.target.transport}")
 
     def _upload_file(self, local_path: str, remote_path: str):
-        """Upload file to remote host."""
+        """Upload file to remote host.
+
+        pywinrm's run_ps wraps the script through `cmd /c powershell
+        -EncodedCommand <base64>` which has Windows' 8192-char *cmd*-line cap,
+        and -EncodedCommand needs UTF-16-LE-then-base64 — roughly tripling the
+        size of the embedded script. On lab-default Windows the effective
+        ceiling is ~3000 chars of PowerShell per call. Chunk at 2000 chars of
+        base64 (~1.5KB raw) to leave headroom for the Open/Write/Close
+        wrapper around each chunk.
+        """
         if self.target.transport == "winrm":
             with open(local_path, "rb") as f:
                 content = base64.b64encode(f.read()).decode()
-            # Chunk large files (WinRM has command size limits)
-            chunk_size = 60000  # ~60KB chunks (base64)
+            chunk_size = 2000
             if len(content) <= chunk_size:
                 self._run_remote(
                     f"[IO.File]::WriteAllBytes('{remote_path}', "
                     f"[Convert]::FromBase64String('{content}'))"
                 )
             else:
-                # Write in chunks
+                # Truncate target file, then append chunks
                 self._run_remote(
+                    f"if (Test-Path '{remote_path}') {{ Remove-Item '{remote_path}' -Force }}; "
                     f"$null = New-Item -ItemType File -Force -Path '{remote_path}'"
                 )
                 for i in range(0, len(content), chunk_size):
                     chunk = content[i:i + chunk_size]
-                    self._run_remote(
+                    code, _, stderr = self._run_remote(
                         f"$bytes = [Convert]::FromBase64String('{chunk}'); "
                         f"$stream = [IO.File]::Open('{remote_path}', "
                         f"[IO.FileMode]::Append); "
                         f"$stream.Write($bytes, 0, $bytes.Length); "
                         f"$stream.Close()"
                     )
+                    if code != 0:
+                        raise RuntimeError(
+                            f"WinRM upload chunk failed at offset {i}: {stderr.strip()[:300]}"
+                        )
         elif self.target.transport == "ssh":
             sftp = self.session.open_sftp()
             sftp.put(local_path, remote_path)

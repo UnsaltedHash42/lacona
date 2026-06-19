@@ -38,8 +38,8 @@ all = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/your-org/lacuna"
-Issues = "https://github.com/your-org/lacuna/issues"
+Homepage = "https://github.com/UnsaltedHash42/lacona"
+Issues = "https://github.com/UnsaltedHash42/lacona/issues"
 
 [project.scripts]
 lacuna = "lacuna.cli:main"

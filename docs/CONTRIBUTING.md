@@ -16,7 +16,7 @@ issue or PR with:
 ### Setup
 
 ```bash
-git clone https://github.com/your-org/lacuna.git
+git clone https://github.com/UnsaltedHash42/lacona.git
 cd lacuna
 pip install -e ".[dev]"
 ```

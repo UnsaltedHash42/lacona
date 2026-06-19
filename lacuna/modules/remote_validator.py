@@ -7,7 +7,7 @@ import hashlib
 import logging
 import time
 from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath, PureWindowsPath
+from pathlib import Path, PureWindowsPath
 
 log = logging.getLogger(__name__)
 
@@ -31,6 +31,8 @@ class ValidationResult:
     process_survived: bool = False
     error: str | None = None
     duration_seconds: float = 0.0
+    notes: list[str] = field(default_factory=list)
+    restore_verified: bool = True
 
 
 class RemoteValidator:
@@ -205,10 +207,11 @@ class RemoteValidator:
                         log.error(
                             "RESTORE VERIFICATION FAILED for %s — hash mismatch", dll_path
                         )
-                        result.notes = [  # type: ignore[attr-defined]
+                        result.restore_verified = False
+                        result.notes.append(
                             f"Restore hash mismatch: expected {original_hash}, "
                             f"got {restored_hash}"
-                        ]
+                        )
 
                 # Clean up breadcrumb
                 self._run_remote(

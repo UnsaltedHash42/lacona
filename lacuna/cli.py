@@ -160,10 +160,18 @@ def _cmd_scan(args):
     if args.format == "json":
         output = []
         for c in candidates:
+            # If the DLL actually lives alongside the host, emit its path so the
+            # remote validator backs up + restores. Otherwise (phantom / not
+            # co-located), leave dll_path null — validator drops the canary
+            # alongside the host without backup.
+            sibling = c.target.path.parent / c.dll_name
+            dll_path = str(sibling) if sibling.exists() else None
+
             entry = {
                 "host_exe": c.target.name,
                 "host_path": str(c.target.path),
                 "dll_name": c.dll_name,
+                "dll_path": dll_path,
                 "hijack_type": c.hijack_type.value,
                 "discovery_method": c.discovery_method,
                 "confidence": c.confidence,
@@ -413,6 +421,8 @@ def _cmd_validate(args):
             "breadcrumb_content": r.breadcrumb_content,
             "error": r.error,
             "duration_seconds": r.duration_seconds,
+            "restore_verified": r.restore_verified,
+            "notes": r.notes,
         }
         for r in results
     ]

@@ -89,8 +89,18 @@ def get_pe_delay_imports(pe_path: Path) -> list[str]:
 DLL_NAME_PATTERN = re.compile(rb"([a-zA-Z0-9_\-]+\.dll)\x00", re.IGNORECASE)
 
 
+MAX_STRING_SCAN_SIZE = 50 * 1024 * 1024  # 50 MB — skip section scan for huge binaries
+
+
 def get_pe_loadlibrary_strings(pe_path: Path) -> list[str]:
     """Extract DLL names referenced as strings (potential LoadLibrary targets)."""
+    try:
+        file_size = pe_path.stat().st_size
+    except OSError:
+        return []
+    if file_size > MAX_STRING_SCAN_SIZE:
+        return []
+
     try:
         pe = pefile.PE(str(pe_path), fast_load=True)
     except pefile.PEFormatError:
@@ -262,17 +272,57 @@ def scan_directory(
     system32_contents: set[str] | None = None,
     recursive: bool = True,
 ) -> list[HijackCandidate]:
-    """Scan all PEs in a directory tree."""
-    pattern = "**/*.exe" if recursive else "*.exe"
+    """Scan all PEs in a directory tree.
+
+    Walks manually instead of using ``Path.glob('**/*.exe')`` because Windows
+    junction points (e.g. the legacy ``%LOCALAPPDATA%\\Application Data``
+    junction that targets ``%LOCALAPPDATA%`` itself) cause ``glob`` to recurse
+    indefinitely. ``os.walk(followlinks=False)`` won't traverse junctions
+    even though they're not strictly symlinks.
+    """
+    import os
+
     all_candidates = []
 
-    for exe_path in directory.glob(pattern):
-        try:
-            candidates = analyze_binary(exe_path, known_dlls, system32_contents)
-            all_candidates.extend(candidates)
-            if candidates:
-                log.info("%s: %d candidates", exe_path.name, len(candidates))
-        except Exception as e:
-            log.error("Failed to analyze %s: %s", exe_path, e)
+    if not recursive:
+        for entry in directory.iterdir():
+            if entry.suffix.lower() == ".exe" and entry.is_file():
+                try:
+                    candidates = analyze_binary(entry, known_dlls, system32_contents)
+                    all_candidates.extend(candidates)
+                    if candidates:
+                        log.info("%s: %d candidates", entry.name, len(candidates))
+                except Exception as e:
+                    log.error("Failed to analyze %s: %s", entry, e)
+        return all_candidates
+
+    for root, dirs, files in os.walk(directory, followlinks=False):
+        # Drop junction-point dirs in-place so os.walk doesn't descend.
+        dirs[:] = [d for d in dirs if not _is_reparse_point(Path(root) / d)]
+        for fname in files:
+            if not fname.lower().endswith(".exe"):
+                continue
+            exe_path = Path(root) / fname
+            try:
+                candidates = analyze_binary(exe_path, known_dlls, system32_contents)
+                all_candidates.extend(candidates)
+                if candidates:
+                    log.info("%s: %d candidates", exe_path.name, len(candidates))
+            except Exception as e:
+                log.error("Failed to analyze %s: %s", exe_path, e)
 
     return all_candidates
+
+
+def _is_reparse_point(p: Path) -> bool:
+    """Return True if p is a junction or symlink (Windows reparse point)."""
+    try:
+        st = p.lstat()
+    except OSError:
+        return False
+    # Symlink: stat S_ISLNK
+    import stat as _stat
+    if _stat.S_ISLNK(st.st_mode):
+        return True
+    # Windows junctions: FILE_ATTRIBUTE_REPARSE_POINT (0x400) on st_file_attributes
+    return bool(getattr(st, "st_file_attributes", 0) & 0x400)

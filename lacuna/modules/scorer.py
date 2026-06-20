@@ -35,8 +35,15 @@ UPDATER_MARKERS = [
 def score_candidate(
     candidate: HijackCandidate,
     all_candidates: list[HijackCandidate] | None = None,
+    dll_target_count: dict[str, set[str]] | None = None,
+    sibling_cache: dict[Path, set[str]] | None = None,
 ) -> tuple[int, dict[str, int]]:
     """Compute operability score for a single candidate.
+
+    ``dll_target_count`` and ``sibling_cache`` are precomputed by
+    :func:`score_candidates` to keep total work O(n) instead of O(n²).
+    Either may be None for one-shot calls; in that case the universal-proxy
+    check uses ``all_candidates`` (slow path), and sibling lookups hit disk.
 
     Returns (total_score, breakdown_dict).
     """
@@ -80,7 +87,11 @@ def score_candidate(
         breakdown["trusted_signer"] = WEIGHTS["trusted_signer"]
 
     # Universal proxy (same DLL name across multiple targets)
-    if all_candidates:
+    if dll_target_count is not None:
+        targets = dll_target_count.get(candidate.dll_name, set())
+        if len(targets) >= 3:  # this candidate's target plus at least 2 others
+            breakdown["universal_proxy"] = WEIGHTS["universal_proxy"]
+    elif all_candidates:
         same_dll_count = sum(
             1 for c in all_candidates
             if c.dll_name == candidate.dll_name and c.target.name != candidate.target.name
@@ -89,14 +100,22 @@ def score_candidate(
             breakdown["universal_proxy"] = WEIGHTS["universal_proxy"]
 
     # Auto-updater heuristic (check sibling filenames in the target dir)
-    try:
-        target_dir = candidate.target.path.parent
-        if target_dir.exists():
-            siblings = {f.name.lower() for f in target_dir.iterdir() if f.is_file()}
-            if any(marker in siblings for marker in UPDATER_MARKERS):
-                breakdown["has_updater"] = WEIGHTS["has_updater"]
-    except (OSError, PermissionError):
-        pass
+    target_dir = candidate.target.path.parent
+    siblings: set[str] | None = None
+    if sibling_cache is not None:
+        siblings = sibling_cache.get(target_dir)
+    if siblings is None:
+        try:
+            if target_dir.exists():
+                siblings = {f.name.lower() for f in target_dir.iterdir() if f.is_file()}
+                if sibling_cache is not None:
+                    sibling_cache[target_dir] = siblings
+        except (OSError, PermissionError):
+            siblings = set()
+            if sibling_cache is not None:
+                sibling_cache[target_dir] = siblings
+    if siblings and any(marker in siblings for marker in UPDATER_MARKERS):
+        breakdown["has_updater"] = WEIGHTS["has_updater"]
 
     total = sum(breakdown.values())
     return total, breakdown
@@ -105,9 +124,25 @@ def score_candidate(
 def score_candidates(
     candidates: list[HijackCandidate],
 ) -> list[HijackCandidate]:
-    """Score all candidates and set score/score_breakdown fields. Returns sorted list."""
+    """Score all candidates and set score/score_breakdown fields.
+
+    Single-pass precomputation of universal-proxy counts (dll_name -> set of
+    distinct target binary names) and a per-directory sibling cache for the
+    auto-updater heuristic. With these the scorer is linear in candidate
+    count regardless of corpus size.
+    """
+    dll_target_count: dict[str, set[str]] = {}
     for c in candidates:
-        total, breakdown = score_candidate(c, all_candidates=candidates)
+        dll_target_count.setdefault(c.dll_name, set()).add(c.target.name)
+
+    sibling_cache: dict[Path, set[str]] = {}
+
+    for c in candidates:
+        total, breakdown = score_candidate(
+            c,
+            dll_target_count=dll_target_count,
+            sibling_cache=sibling_cache,
+        )
         c.score = total
         c.score_breakdown = breakdown
 
